@@ -10,35 +10,12 @@ import androidx.compose.ui.selection.*
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.font.FontStyle.*
 import androidx.compose.ui.unit.*
+import data.*
 
-
-sealed class Result<out R> {
-	data class Success<out T>(val data: T) : Result<T>()
-	data class Error(val exception: Exception) : Result<Nothing>()
-}
 
 
 val Repository = ambientOf<LaunchAgentsRepository>()
 
-data class LaunchAgent(val name: String, val path: String)
-
-interface LaunchAgentsRepository {
-	fun getLaunchAgents(callback: (Result<LaunchAgents>) -> Unit)
-}
-
-class LaunchAgentsRepositoryImpl : LaunchAgentsRepository {
-
-	override fun getLaunchAgents(callback: (Result<LaunchAgents>) -> Unit) {
-		val agents = LaunchAgents(mutableListOf(
-			LaunchAgent("test1", "/path/1"),
-			LaunchAgent("test2", "/path/2"),
-			LaunchAgent("test3", "/path/3")
-		), null)
-		val result = Result.Success(agents)
-		callback(result)
-	}
-
-}
 
 @Composable
 fun LaunchControlView() {
@@ -54,14 +31,14 @@ fun LaunchControlView() {
 
 @Composable
 fun Main() {
-	val currentLaunchAgent: MutableState<LaunchAgent?> = remember { mutableStateOf(null) }
+	val currentLaunchAgent: MutableState<LaunchService?> = remember { mutableStateOf(null) }
 
 	TwoColumnsLayout(currentLaunchAgent)
 }
 
 
 @Composable
-fun TwoColumnsLayout(currentLaunchAgent: MutableState<LaunchAgent?>) {
+fun TwoColumnsLayout(currentLaunchAgent: MutableState<LaunchService?>) {
 	Row(Modifier.fillMaxSize()) {
 		Box(modifier = Modifier.fillMaxWidth(0.4f), contentAlignment = Alignment.Center) {
 			LaunchAgentsList(currentLaunchAgent)
@@ -72,15 +49,15 @@ fun TwoColumnsLayout(currentLaunchAgent: MutableState<LaunchAgent?>) {
 
 
 @Composable
-fun CurrentLaunchAgent(launchAgent: LaunchAgent?) {
-	when (launchAgent) {
+fun CurrentLaunchAgent(launchService: LaunchService?) {
+	when (launchService) {
 		null -> {
 			Text("Select issue")
 		}
 		else -> {
 			val repo = Repository.current
-			val issueBody = uiStateFrom(null) { clb: (Result<LaunchAgents>) -> Unit ->
-				repo.getLaunchAgents(clb)
+			val issueBody = uiStateFrom(null) { clb: (Result<LaunchServices>) -> Unit ->
+				repo.getUserAgents { clb }
 			}.value
 			when (issueBody) {
 				is UiState.Loading -> Loader()
@@ -93,14 +70,9 @@ fun CurrentLaunchAgent(launchAgent: LaunchAgent?) {
 
 
 
-data class LaunchAgents(
-	val nodes: List<LaunchAgent>,
-	val cursor: String?,
-)
-
 
 @Composable
-fun LaunchAgentsList(currentLaunchAgent: MutableState<LaunchAgent?>) {
+fun LaunchAgentsList(currentLaunchService: MutableState<LaunchService?>) {
 	val scroll = rememberScrollState(0f)
 
 	Column {
@@ -123,7 +95,7 @@ fun LaunchAgentsList(currentLaunchAgent: MutableState<LaunchAgent?>) {
 					// FilterTabs(issuesState, scroll)
 					ListBody(
 						scroll,
-						currentLaunchAgent = currentLaunchAgent
+						currentLaunchService = currentLaunchService
 					)
 				}
 			}
@@ -134,11 +106,11 @@ fun LaunchAgentsList(currentLaunchAgent: MutableState<LaunchAgent?>) {
 @Composable
 fun ListBody(
 	scroll: ScrollState,
-	currentLaunchAgent: MutableState<LaunchAgent?>,
+	currentLaunchService: MutableState<LaunchService?>,
 ) {
 	val repo = Repository.current
-	val launchAgents = uiStateFrom(null) { clb: (Result<LaunchAgents>) -> Unit ->
-		repo.getLaunchAgents(callback = clb)
+	val launchAgents = uiStateFrom(null) { clb: (Result<LaunchServices>) -> Unit ->
+		repo.getUserAgents(clb)
 	}
 
 	ScrollableColumn(scrollState = scroll) {
@@ -147,7 +119,7 @@ fun ListBody(
 				is UiState.Success -> {
 					for (iss in it.data.nodes) {
 						Box(modifier = Modifier.clickable {
-							currentLaunchAgent.value = iss
+							currentLaunchService.value = iss
 						}, contentAlignment = Alignment.CenterStart) {
 							ListItem(iss)
 						}
@@ -174,7 +146,7 @@ fun Loader() {
 
 
 @Composable
-fun ListItem(x: LaunchAgent) {
+fun ListItem(x: LaunchService) {
 	Card(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
 		LaunchAgentCardBody(x)
 	}
@@ -182,7 +154,7 @@ fun ListItem(x: LaunchAgent) {
 
 
 @Composable
-fun LaunchAgentCardBody(x: LaunchAgent) {
+fun LaunchAgentCardBody(x: LaunchService) {
 	Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
 		Column {
 			Row {
@@ -199,12 +171,12 @@ fun LaunchAgentCardBody(x: LaunchAgent) {
 }
 
 @Composable
-fun FilePath(x: LaunchAgent) {
+fun FilePath(x: LaunchService) {
 	Text(text = x.path, fontStyle = Italic, color = darkColors().secondary)
 }
 
 
 @Composable
-fun Title(x: LaunchAgent) {
+fun Title(x: LaunchService) {
 	Text(text = x.name, fontWeight = FontWeight(600))
 }

@@ -1,6 +1,7 @@
 import androidx.compose.desktop.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.*
+import data.*
 import ui.*
 
 

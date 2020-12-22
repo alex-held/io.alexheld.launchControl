@@ -2,7 +2,8 @@ package ui
 
 import androidx.compose.runtime.*
 
-typealias RepositoryCall<T> = ((Result<T>) -> Unit) -> Unit
+
+typealias RepositoryCall<T> = ((data.Result<T>) -> Unit) -> Unit
 
 sealed class UiState<out T> {
 	object Loading : UiState<Nothing>()
@@ -21,8 +22,8 @@ fun <T> uiStateFrom(
 		state.value = UiState.Loading
 		repositoryCall { result ->
 			state.value = when (result) {
-				is Result.Success -> UiState.Success(result.data)
-				is Result.Error -> UiState.Error(result.exception)
+				is data.Result.Success -> UiState.Success(result.data)
+				is data.Result.Error -> UiState.Error(result.exception)
 			}
 		}
 	}
