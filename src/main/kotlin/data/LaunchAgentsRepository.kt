@@ -8,29 +8,54 @@ import kotlin.io.path.*
 
 
 interface LaunchAgentsRepository {
-	fun getUserAgents(callback: (Result<LaunchServices>) -> Unit)
-	fun getLaunchAgents(callback: (Result<LaunchServices>) -> Unit)
+
+	 fun getByKind(kind: LaunchServiceKind, callback: (Result<LaunchServices>) -> Unit,)
+	 fun getUserAgents(callback: (Result<LaunchServices>) -> Unit)
+	 fun getGlobalAgents(callback: (Result<LaunchServices>) -> Unit)
 }
 
 class LaunchAgentsRepositoryImpl : LaunchAgentsRepository {
 
-	@ExperimentalPathApi
+	private fun loadGlobalDaemons() = load("/Library/LaunchDaemons") {
+		LaunchService(nameWithoutExtension, path, Running, GlobalDaemon)
+	}
+
+	private fun loadGlobalAgents() = load("/Library/LaunchAgents") {
+		LaunchService(nameWithoutExtension, path, Running, GlobalAgent)
+	}
+
+	private fun loadUserAgents() = load("/Users/dev/Library/LaunchAgents") {
+		LaunchService(nameWithoutExtension, path, Running, UserAgent)
+	}
+
+	private fun load(dir: String, c: File.() -> LaunchService): List<LaunchService> = File(dir).walk()
+		.filter { it.isFile && it.extension == "plist" }
+		.map(c)
+		.onEach { println(it) }
+		.toList()
+
+	override fun getByKind(kind: LaunchServiceKind, callback: (Result<LaunchServices>) -> Unit) {
+		val results = all().filter { it.isOfKind(kind) }
+		val result = Result.Success(LaunchServices(results, ""))
+		callback(result)
+	}
+
+	private fun all() : MutableList<LaunchService>{
+		val results = mutableListOf<LaunchService>()
+		results.addAll(loadUserAgents())
+		results.addAll(loadGlobalAgents())
+		results.addAll(loadGlobalDaemons())
+		return results
+	}
+
 	override fun getUserAgents(callback: (Result<LaunchServices>) -> Unit) {
-
-		File(Paths.UserAgentsPath).walk().forEach {
-			println(it.toString())
-		}
-
-		val results = File(Paths.UserAgentsPath).walk()
-			.filter {  it.extension == "plist"}
-			.map { LaunchService(it.nameWithoutExtension, it.toString(), Running, UserAgent) }
-			.toList()
+		val results = all()
 
 		val result = Result.Success(LaunchServices(results, ""))
 		callback(result)
 	}
 
-	override fun getLaunchAgents(callback: (Result<LaunchServices>) -> Unit) {
+	override fun getGlobalAgents(callback: (Result<LaunchServices>) -> Unit) {
 		val agents = LaunchServices(mutableListOf(
 			LaunchService("test1", "/path/1", Stopped, GlobalAgent),
 			LaunchService("test2", "/path/2", Running, GlobalDaemon),

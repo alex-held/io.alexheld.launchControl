@@ -6,16 +6,17 @@ import androidx.compose.material.*
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.platform.*
 import androidx.compose.ui.selection.*
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.font.FontStyle.*
 import androidx.compose.ui.unit.*
 import data.*
-
+import data.LaunchServiceKind.*
+import java.io.*
 
 
 val Repository = ambientOf<LaunchAgentsRepository>()
-
 
 @Composable
 fun LaunchControlView() {
@@ -51,51 +52,62 @@ fun TwoColumnsLayout(currentLaunchAgent: MutableState<LaunchService?>) {
 @Composable
 fun CurrentLaunchAgent(launchService: LaunchService?) {
 	when (launchService) {
-		null -> {
-			Text("Select issue")
-		}
+		null -> CurrentLaunchServiceStatus { Text("Select issue") }
 		else -> {
 			val repo = Repository.current
 			val issueBody = uiStateFrom(null) { clb: (Result<LaunchServices>) -> Unit ->
-				repo.getUserAgents { clb }
+				repo.getByKind(launchService.kind, clb)
 			}.value
 			when (issueBody) {
-				is UiState.Loading -> Loader()
-				is UiState.Error -> Error("Issue loading error")
-				is UiState.Success -> Loader()
+				is UiState.Loading -> CurrentLaunchServiceStatus { Loader() }
+				is UiState.Error -> CurrentLaunchServiceStatus { Error("Issue loading error") }
+				is UiState.Success -> CurrentLaunchServiceActive(launchService, issueBody.data)
 			}
 		}
 	}
 }
 
+@Composable
+fun CurrentLaunchServiceActive(launchService: LaunchService, data: LaunchServices) {
+	ScrollableColumn(modifier = Modifier.padding(15.dp).fillMaxSize()) {
+		SelectionContainer {
+			Text(
+				text = launchService.name,
+				style = MaterialTheme.typography.h5
+			)
+		}
 
+		Spacer(Modifier.height(8.dp))
+
+		SelectionContainer {
+			Text(
+				text = File(launchService.path).readText(),
+				modifier = Modifier.padding(4.dp),
+				style = MaterialTheme.typography.body1
+			)
+		}
+	}
+}
 
 
 @Composable
 fun LaunchAgentsList(currentLaunchService: MutableState<LaunchService?>) {
 	val scroll = rememberScrollState(0f)
-
+	val launchServiceKind = remember { mutableStateOf(All) }
 	Column {
 		Scaffold(
 			topBar = {
 				TopAppBar(
 					title = { Text(text = "LaunchControl") },
-					actions = {
-						Button(onClick = { scroll.scrollTo(0F) }) {
-							Text("Scroll -> Top")
-						}
-						Button(onClick = { scroll.scrollTo(scroll.maxValue) }) {
-							Text("Scroll -> Bottom")
-						}
-					}
 				)
 			},
 			bodyContent = {
 				Column {
-					// FilterTabs(issuesState, scroll)
+					FilterTabs(launchServiceKind, scroll)
 					ListBody(
 						scroll,
-						currentLaunchService = currentLaunchService
+						currentLaunchService = currentLaunchService,
+						launchServiceKind.value
 					)
 				}
 			}
@@ -104,13 +116,38 @@ fun LaunchAgentsList(currentLaunchService: MutableState<LaunchService?>) {
 }
 
 @Composable
+fun CurrentLaunchServiceStatus(content: @Composable () -> Unit) {
+	Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+		content()
+	}
+}
+
+@Composable
+fun FilterTabs(kind: MutableState<LaunchServiceKind>, scroll: ScrollState) {
+	TabRow(selectedTabIndex = LaunchServiceKind.values().toList().indexOf(kind.value)) {
+		LaunchServiceKind.values().forEach {
+			Tab(
+				text = { Text(it.name) },
+				selected = kind.value == it,
+				onClick = {
+					kind.value = it
+					scroll.scrollTo(0F)
+				}
+			)
+		}
+	}
+}
+
+
+@Composable
 fun ListBody(
 	scroll: ScrollState,
 	currentLaunchService: MutableState<LaunchService?>,
+	serviceKind: LaunchServiceKind
 ) {
 	val repo = Repository.current
 	val launchAgents = uiStateFrom(null) { clb: (Result<LaunchServices>) -> Unit ->
-		repo.getUserAgents(clb)
+		repo.getByKind(serviceKind, clb)
 	}
 
 	ScrollableColumn(scrollState = scroll) {
@@ -124,7 +161,7 @@ fun ListBody(
 							ListItem(iss)
 						}
 					}
-					// MoreButton(launchAgents)
+					//MoreButton(launchAgents)
 				}
 
 				is UiState.Loading -> Loader()
